@@ -37,6 +37,7 @@ class LogStash::Outputs::Http < LogStash::Outputs::Base
   
   config :port, :validate => :string	
   config :tenant_id, :validate => :string	
+  config :metrics, :validate => :string
 
   # This lets you choose the structure and parts of the event that are sent.
   #
@@ -55,41 +56,39 @@ class LogStash::Outputs::Http < LogStash::Outputs::Base
   #
   # Otherwise, the event is sent as json.
   config :format, :validate => ["json"], :default => "json"
-
   #config :message, :validate => :string
 
   public
   def register
     require "ftw"
     require "uri"
+    require "json"
+
     @agent = FTW::Agent.new
     @url = url+":"+port+"/v2.0/"+tenant_id+"/ingest"
+    @content_type = "application/json"
   end # def register
 
   public
   def receive(event)
     return unless output?(event)
 
-    case @http_method
-    	when "post"
-		request = @agent.post(event.sprintf(@url))
-    	else
-      		@logger.error("Unknown verb:", :verb => @http_method)
-    end
+    request = @agent.post(event.sprintf(@url))
     request["Content-Type"] = @content_type
 
     begin
-      if @format == "json"
-        request.body = evt.to_json
-      end
-      response = @agent.execute(request)
+    #  if @format == "json"
+    	puts @metrics
+	request.body = event.sprintf(@metrics)
+    #  end
+    	response = @agent.execute(request)
 
       # Consume body to let this connection be reused
-      rbody = ""
-      response.read_body { |c| rbody << c }
-      #puts rbody
+    	rbody = ""
+    	response.read_body { |c| rbody << c }
+    	puts rbody
     rescue Exception => e
-      @logger.warn("Unhandled exception", :request => request, :response => response, :exception => e, :stacktrace => e.backtrace)
+        @logger.error("Unhandled exception", :request => request.body, :response => response)#, :exception => e, :stacktrace => e.backtrace)
     end
   end # def receive
 end
